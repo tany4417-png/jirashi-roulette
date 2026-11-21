@@ -160,8 +160,8 @@
     winnerIdx = -1; $('result').textContent = '';
     const w = L.fairIndex(n);
     const from = mod(rot, TAU);
-    const to = L.targetRot(from, w, n, 7);
-    const dur = 7500, t0 = performance.now();
+    const to = L.targetRot(from, w, n, 5);
+    const dur = 9000, t0 = performance.now();
     let lastIdx = L.indexAt(from, n);
     function step(now) {
       const p = Math.min(1, (now - t0) / dur);

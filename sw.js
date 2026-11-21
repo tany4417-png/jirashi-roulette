@@ -1,6 +1,6 @@
 // 回線がなくても開けるようにする。つながるときは毎回サーバーに新しい版を確かめに行く
-const CACHE = 'jirashi-roulette-v4';
-const FILES = ['./', 'index.html', 'app.js?v=4', 'logic.js?v=4', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'jirashi-roulette-v5';
+const FILES = ['./', 'index.html', 'app.js?v=5', 'logic.js?v=5', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
