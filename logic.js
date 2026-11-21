@@ -2,8 +2,8 @@
 (function (root) {
   const TAU = Math.PI * 2;
   const mod = (a, m) => ((a % m) + m) % m;
-  // 針の位置。真上から時計回りに測った角度で、右側（3時の方向）に置く
-  const POINTER = Math.PI / 2;
+  // 針の位置。真上から時計回りに測った角度。名前が正立して読める真上に置く
+  const POINTER = 0;
 
   // 当選者は暗号用乱数で均等に選ぶ（剰余の偏りを除くため棄却サンプリング）
   function fairIndex(n) {
@@ -17,7 +17,8 @@
     return x % n;
   }
 
-  const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+  // 5乗の減速。最後の数秒はゆっくり這うように進む
+  const easeOut = (t) => 1 - Math.pow(1 - t, 5);
 
   // 針の下に来る扇の番号。扇 i は盤の真上から時計回りに [i*s, (i+1)*s)
   function indexAt(rot, n) {

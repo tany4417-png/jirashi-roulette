@@ -65,12 +65,28 @@
     const { R } = geo();
     if (!n) { fonts = []; return; }
     const s = TAU / n;
-    const base = Math.min(R * 0.13, R * 0.6 * s * 0.7);
-    const maxW = R * 0.64;
+    // 名前は扇の幅の向きに書く。使える幅はその半径での弦の長さ
+    const chord = (r) => Math.min(R * 0.95, 2 * r * Math.sin(s / 2)) * 0.82;
+    const base = R * 0.15;
+    const width = (t) => { ctx.font = FONT(100); return ctx.measureText(t).width / 100; };
     fonts = list.map((m) => {
-      ctx.font = FONT(base);
-      const w = ctx.measureText(m.name).width;
-      return Math.max(9, w > maxW ? (base * maxW) / w : base);
+      const name = m.name;
+      const one = Math.min(base, chord(R * 0.72) / width(name));
+      // 1行だと小さくなりすぎる長い名前は2行に分ける（外側が1行目）
+      if (name.length >= 4) {
+        const h = Math.ceil(name.length / 2);
+        const a = name.slice(0, h), b = name.slice(h);
+        const two = Math.min(base * 0.85, chord(R * 0.78) / width(a), chord(R * 0.6) / width(b));
+        if (two > one * 1.25) return { lines: [a, b], fit: two, two: true };
+      }
+      return { lines: [name], fit: one, two: false };
+    });
+    // 文字の大きさは中央値にそろえる。それでも入らない長い名前だけ小さくする
+    const fits = fonts.map((f) => f.fit).sort((x, y) => x - y);
+    const common = fits[Math.floor((fits.length - 1) / 2)];
+    fonts.forEach((f) => {
+      f.fs = Math.max(9, Math.min(common, f.fit));
+      f.r = f.two ? [R * 0.8, R * 0.8 - f.fs * 1.1] : [R * 0.72];
     });
   }
 
@@ -111,27 +127,26 @@
       }
     }
 
-    // 名前。左半分に来た扇は180度返して、逆さまに見えないようにする
-    ctx.textBaseline = 'middle'; ctx.fillStyle = '#1f1f1f';
+    // 名前。文字の下側を中心に向け、扇の幅の向きに書く
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.fillStyle = '#1f1f1f';
     for (let i = 0; i < n; i++) {
+      const f = fonts[i]; if (!f) continue;
       const mid = (i + 0.5) * s + rot - Math.PI / 2;
-      const flip = Math.cos(mid) < 0;
       ctx.save();
       ctx.translate(c, c);
-      ctx.rotate(flip ? mid + Math.PI : mid);
-      ctx.font = FONT(fonts[i] || 12);
-      ctx.textAlign = flip ? 'left' : 'right';
+      ctx.rotate(mid + Math.PI / 2); // 文字の上が外側を向く
+      ctx.font = FONT(f.fs);
       if (winnerIdx >= 0 && i !== winnerIdx) ctx.globalAlpha = 0.45;
-      ctx.fillText(list[i].name, flip ? -R * 0.9 : R * 0.9, 0);
+      f.lines.forEach((t, k) => ctx.fillText(t, 0, -f.r[k]));
       ctx.restore();
     }
 
-    // 中心と針（右側）
+    // 中心と針（真上）
     ctx.fillStyle = colors.bg;
     ctx.beginPath(); ctx.arc(c, c, R * 0.07, 0, TAU); ctx.fill();
     ctx.fillStyle = colors.text;
-    const tipX = c + R * 0.93, baseX = W - 1, hh = W * 0.035;
-    ctx.beginPath(); ctx.moveTo(tipX, c); ctx.lineTo(baseX, c - hh); ctx.lineTo(baseX, c + hh); ctx.closePath(); ctx.fill();
+    const tipY = c - R * 0.93, baseY = 1, hw = W * 0.035;
+    ctx.beginPath(); ctx.moveTo(c, tipY); ctx.lineTo(c - hw, baseY); ctx.lineTo(c + hw, baseY); ctx.closePath(); ctx.fill();
   }
 
   // ---------- 回す ----------
@@ -145,8 +160,8 @@
     winnerIdx = -1; $('result').textContent = '';
     const w = L.fairIndex(n);
     const from = mod(rot, TAU);
-    const to = L.targetRot(from, w, n, 5);
-    const dur = 4200, t0 = performance.now();
+    const to = L.targetRot(from, w, n, 7);
+    const dur = 7500, t0 = performance.now();
     let lastIdx = L.indexAt(from, n);
     function step(now) {
       const p = Math.min(1, (now - t0) / dur);
