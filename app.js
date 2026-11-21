@@ -5,17 +5,68 @@
   const KEY = 'jirashi-roulette-v1';
 
   // ---------- 保存 ----------
-  let state = { members: [], history: [] };
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (saved && Array.isArray(saved.members)) {
-      state.members = saved.members;
-      // 旧版は名前だけの配列で持っていた
-      state.history = (saved.history || []).map((h) => (typeof h === 'string' ? { name: h, t: null } : h));
+  // localStorage と IndexedDB の両方に書く。iPhoneのホーム画面アプリは localStorage の
+  // ディスク書き込みが遅れることがあり、直後にタスクキルすると消える場合があるため。
+  // 読むときは savedAt が新しいほうを採用する。
+  let state = { members: [], history: [], savedAt: 0 };
+  function apply(saved) {
+    if (!saved || !Array.isArray(saved.members)) return false;
+    state.members = saved.members;
+    // 旧版は名前だけの配列で持っていた
+    state.history = (saved.history || []).map((h) => (typeof h === 'string' ? { name: h, t: null } : h));
+    state.savedAt = saved.savedAt || 0;
+    return true;
+  }
+  try { apply(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch (e) { /* 読めなくても初期状態で動かす */ }
+
+  let dbp = null;
+  function db() {
+    if (!dbp) {
+      dbp = new Promise((res, rej) => {
+        if (!window.indexedDB) { rej(new Error('no idb')); return; }
+        const r = indexedDB.open('roulette', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      dbp.catch(() => {});
     }
-  } catch (e) { /* 読めなくても初期状態で動かす */ }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+    return dbp;
+  }
+  async function idbGet() {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const q = d.transaction('kv', 'readonly').objectStore('kv').get(KEY);
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    });
+  }
+  function idbSet(json) {
+    db().then((d) => { d.transaction('kv', 'readwrite').objectStore('kv').put(json, KEY); }).catch(() => {});
+  }
+
+  const save = () => {
+    state.savedAt = Date.now();
+    const json = JSON.stringify(state);
+    try { localStorage.setItem(KEY, json); } catch (e) {}
+    idbSet(json);
+  };
   const active = () => state.members.filter((m) => m.on);
+
+  // 起動時に IndexedDB も読み、そちらが新しければ置き換える
+  async function loadDurable() {
+    try {
+      const raw = await idbGet();
+      const saved = raw ? JSON.parse(raw) : null;
+      if (saved && (saved.savedAt || 0) > (state.savedAt || 0) && apply(saved)) {
+        try { localStorage.setItem(KEY, raw); } catch (e) {}
+        renderMembers(); renderHistory();
+      } else if (state.members.length || state.history.length) {
+        idbSet(JSON.stringify(state)); // 旧版のデータを IndexedDB にも写す
+      }
+    } catch (e) {}
+    // ブラウザに「このサイトのデータは消さないで」と頼む（対応していれば）
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  }
 
   // ---------- 音（iPhoneのマナーモード中は鳴らない） ----------
   let actx = null, lastTick = 0;
@@ -297,6 +348,7 @@
   readColors();
   resize();
   renderMembers(); renderHistory();
+  loadDurable();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
